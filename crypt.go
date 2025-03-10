@@ -1,5 +1,14 @@
 package main
 
+import (
+	"context"
+	"fmt"
+	"golang.org/x/sync/semaphore"
+	"runtime"
+	"slices"
+	"time"
+)
+
 // Encrypt encrypts data using a PublicKey.
 func Encrypt(data []byte, public PublicKey) []uint {
 	result := make([]uint, 0)
@@ -48,4 +57,57 @@ func Decrypt(data []uint, private PrivateKey, public PublicKey) []byte {
 	}
 
 	return res
+}
+
+func BruteForce(data []uint, public PublicKey, expected []byte, maxVal uint) {
+	u, v := uint(1), uint(1)
+	t := time.Now()
+	done := make(chan PrivateKey)
+	sem := semaphore.NewWeighted(int64(runtime.NumCPU()))
+	ctx := context.Background()
+	keysFound := 0
+loop:
+	for {
+		select {
+		case p := <-done:
+			fmt.Printf("found private key! u = %d, v = %d\n", p.U, p.V)
+			fmt.Println("time taken: ", time.Now().Sub(t))
+			keysFound++
+		default:
+			err := sem.Acquire(ctx, 1)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			//fmt.Printf("trying u = %d, v = %d\n", u, v)
+			go bruteHelper(data, public, expected, u, v, done, sem)
+
+			if v < u {
+				v++
+			} else if u == maxVal {
+				fmt.Println("max value reached")
+				break loop
+			} else {
+				u++
+				v = 1
+			}
+		}
+	}
+	fmt.Println("# of keys found: ", keysFound)
+}
+
+func bruteHelper(data []uint, public PublicKey, expected []byte, u, v uint, done chan<- PrivateKey, sem *semaphore.Weighted) {
+	test := Decrypt(data, PrivateKey{
+		U: u,
+		V: v,
+	}, public)
+
+	if slices.Equal(test, expected) {
+		done <- PrivateKey{
+			U: u,
+			V: v,
+		}
+	}
+	sem.Release(1)
+	return
 }

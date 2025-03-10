@@ -22,13 +22,13 @@ func (s S) IsSuperincreasing() bool {
 type PublicKey [8]uint
 
 func NewPublicKey(s S, private PrivateKey) (PublicKey, error) {
+	if private.U <= 2*s[7] {
+		return PublicKey{}, fmt.Errorf("U (%d) <= 2*Sn (%d)", private.U, 2*s[7])
+	}
+
 	result := [8]uint{}
 	for i, val := range s {
 		result[i] = (val * private.V) % private.U
-	}
-
-	if private.U <= 2*result[7] {
-		return PublicKey{}, fmt.Errorf("U (%d) <= 2*Sn (%d)", private.U, 2*result[7])
 	}
 
 	return result, nil

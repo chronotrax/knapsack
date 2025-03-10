@@ -84,6 +84,30 @@ func Test_Decrypt(t *testing.T) {
 			},
 			want: []byte{byte('B'), byte('a'), byte('t')},
 		},
+		{
+			name: "test Decrypt 2",
+			args: args{
+				data: []uint{736, 852, 719},
+				private: PrivateKey{
+					U: 113,
+					V: 13,
+				},
+				public: PublicKey{39, 65, 117, 234, 494, 303, 671, 670},
+			},
+			want: []byte{byte('B'), byte('a'), byte('t')},
+		},
+		{
+			name: "test Decrypt 3",
+			args: args{
+				data: []uint{736, 852, 719},
+				private: PrivateKey{
+					U: 902,
+					V: 464,
+				},
+				public: PublicKey{39, 65, 117, 234, 494, 303, 671, 670},
+			},
+			want: []byte{byte('B'), byte('a'), byte('t')},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
