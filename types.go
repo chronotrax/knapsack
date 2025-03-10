@@ -7,11 +7,11 @@ type S [8]uint
 
 func (s S) IsSuperincreasing() bool {
 	sum := s[0]
-	for i := 1; i < 8; i++ {
-		if s[i] <= sum {
+	for _, si := range s[1:] {
+		if si <= sum {
 			return false
 		}
-		sum += s[i]
+		sum += si
 	}
 	return true
 }
@@ -27,8 +27,8 @@ func NewPublicKey(s S, private PrivateKey) (PublicKey, error) {
 	}
 
 	result := [8]uint{}
-	for i, val := range s {
-		result[i] = (val * private.V) % private.U
+	for i, si := range s {
+		result[i] = (si * private.V) % private.U
 	}
 
 	return result, nil

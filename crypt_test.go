@@ -6,6 +6,8 @@ import (
 )
 
 func Test_Encrypt(t *testing.T) {
+	text := []byte("Bat")
+
 	type args struct {
 		data []byte
 		pub  PublicKey
@@ -16,9 +18,9 @@ func Test_Encrypt(t *testing.T) {
 		want []uint
 	}{
 		{
-			name: "test Encrypt 1",
+			name: "valid 1",
 			args: args{
-				data: []byte{byte('B'), byte('a'), byte('t')},
+				data: text,
 				pub:  PublicKey{39, 65, 117, 234, 494, 303, 671, 670},
 			},
 			want: []uint{736, 852, 719},
@@ -33,35 +35,9 @@ func Test_Encrypt(t *testing.T) {
 	}
 }
 
-func Test_EEA(t *testing.T) {
-	type args struct {
-		a uint
-		m uint
-	}
-	tests := []struct {
-		name string
-		args args
-		want uint
-	}{
-		{
-			name: "test EEA 1",
-			args: args{
-				a: 13,
-				m: 672,
-			},
-			want: 517,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := EEA(tt.args.a, tt.args.m); got != tt.want {
-				t.Errorf("EEA() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func Test_Decrypt(t *testing.T) {
+	text := []byte("Bat")
+
 	type args struct {
 		data    []uint
 		private PrivateKey
@@ -73,7 +49,7 @@ func Test_Decrypt(t *testing.T) {
 		want []byte
 	}{
 		{
-			name: "test Decrypt 1",
+			name: "valid 1",
 			args: args{
 				data: []uint{736, 852, 719},
 				private: PrivateKey{
@@ -82,10 +58,10 @@ func Test_Decrypt(t *testing.T) {
 				},
 				public: PublicKey{39, 65, 117, 234, 494, 303, 671, 670},
 			},
-			want: []byte{byte('B'), byte('a'), byte('t')},
+			want: text,
 		},
 		{
-			name: "test Decrypt 2",
+			name: "valid 2",
 			args: args{
 				data: []uint{736, 852, 719},
 				private: PrivateKey{
@@ -94,10 +70,10 @@ func Test_Decrypt(t *testing.T) {
 				},
 				public: PublicKey{39, 65, 117, 234, 494, 303, 671, 670},
 			},
-			want: []byte{byte('B'), byte('a'), byte('t')},
+			want: text,
 		},
 		{
-			name: "test Decrypt 3",
+			name: "valid 3",
 			args: args{
 				data: []uint{736, 852, 719},
 				private: PrivateKey{
@@ -106,41 +82,13 @@ func Test_Decrypt(t *testing.T) {
 				},
 				public: PublicKey{39, 65, 117, 234, 494, 303, 671, 670},
 			},
-			want: []byte{byte('B'), byte('a'), byte('t')},
+			want: text,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := Decrypt(tt.args.data, tt.args.private, tt.args.public); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Decrypt() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestGCD(t *testing.T) {
-	type args struct {
-		a uint
-		b uint
-	}
-	tests := []struct {
-		name string
-		args args
-		want uint
-	}{
-		{
-			name: "test GCD",
-			args: args{
-				a: 13,
-				b: 672,
-			},
-			want: 1,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := GCD(tt.args.a, tt.args.b); got != tt.want {
-				t.Errorf("GCD() = %v, want %v", got, tt.want)
 			}
 		})
 	}

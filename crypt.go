@@ -29,18 +29,18 @@ func Encrypt(data []byte, public PublicKey) []uint {
 	return result
 }
 
-// Decrypt decrypts data using PrivateKey & PublicKey.
-func Decrypt(data []uint, private PrivateKey, public PublicKey) []byte {
+// Decrypt decrypts cipher using PrivateKey & PublicKey.
+func Decrypt(cipher []uint, private PrivateKey, public PublicKey) []byte {
 	inverse := EEA(private.V, private.U)
 
-	// re-create S
-	s := [8]uint{}
+	// re-create superincreasing set S
+	s := S{}
 	for i := 0; i < 8; i++ {
 		s[i] = (public[i] * inverse) % private.U
 	}
 
 	res := make([]byte, 0)
-	for _, d := range data {
+	for _, d := range cipher {
 		t := (d * inverse) % private.U
 		sum := byte(0)
 		bit := byte(1)
@@ -59,17 +59,20 @@ func Decrypt(data []uint, private PrivateKey, public PublicKey) []byte {
 	return res
 }
 
-func BruteForce(data []uint, public PublicKey, expected []byte, maxVal uint) {
+// BruteForce finds private keys given cipher & PublicKey.
+// expected is the original data to compare against.
+// maxVal is the highest PrivateKey values to brute force until.
+func BruteForce(cipher []uint, public PublicKey, expected []byte, maxVal uint) {
 	u, v := uint(1), uint(1)
 	t := time.Now()
-	done := make(chan PrivateKey)
+	keys := make(chan PrivateKey)
 	sem := semaphore.NewWeighted(int64(runtime.NumCPU()))
 	ctx := context.Background()
 	keysFound := 0
 loop:
 	for {
 		select {
-		case p := <-done:
+		case p := <-keys:
 			fmt.Printf("found private key! u = %d, v = %d\n", p.U, p.V)
 			fmt.Println("time taken: ", time.Now().Sub(t))
 			keysFound++
@@ -80,7 +83,7 @@ loop:
 			}
 
 			//fmt.Printf("trying u = %d, v = %d\n", u, v)
-			go bruteHelper(data, public, expected, u, v, done, sem)
+			go bruteHelper(cipher, public, expected, u, v, keys, sem)
 
 			if v < u {
 				v++
@@ -96,14 +99,14 @@ loop:
 	fmt.Println("# of keys found: ", keysFound)
 }
 
-func bruteHelper(data []uint, public PublicKey, expected []byte, u, v uint, done chan<- PrivateKey, sem *semaphore.Weighted) {
+func bruteHelper(data []uint, public PublicKey, expected []byte, u, v uint, keys chan<- PrivateKey, sem *semaphore.Weighted) {
 	test := Decrypt(data, PrivateKey{
 		U: u,
 		V: v,
 	}, public)
 
 	if slices.Equal(test, expected) {
-		done <- PrivateKey{
+		keys <- PrivateKey{
 			U: u,
 			V: v,
 		}
