@@ -37,10 +37,9 @@ func TestNewPublicKey(t *testing.T) {
 		private PrivateKey
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    PublicKey
-		wantErr bool
+		name string
+		args args
+		want PublicKey
 	}{
 		{
 			name: "valid 1",
@@ -51,30 +50,12 @@ func TestNewPublicKey(t *testing.T) {
 					V: 13,
 				},
 			},
-			want:    PublicKey{39, 65, 117, 234, 494, 303, 671, 670},
-			wantErr: false,
-		},
-		{
-			name: "invalid 1",
-			args: args{
-				s: S{3, 5, 9, 18, 38, 75, 155, 336}, // 336*2 = 672
-				private: PrivateKey{
-					U: 672,
-					V: 13,
-				},
-			},
-			want:    PublicKey{},
-			wantErr: true,
+			want: PublicKey{39, 65, 117, 234, 494, 303, 671, 670},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewPublicKey(tt.args.s, tt.args.private)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewPublicKey() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
+			if got := NewPublicKey(tt.args.s, tt.args.private); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NewPublicKey() got = %v, want %v", got, tt.want)
 			}
 		})

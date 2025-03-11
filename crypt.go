@@ -39,24 +39,25 @@ func Decrypt(cipher []uint, private PrivateKey, public PublicKey) []byte {
 		s[i] = (public[i] * inverse) % private.U
 	}
 
-	res := make([]byte, 0)
-	for _, d := range cipher {
-		t := (d * inverse) % private.U
+	result := make([]byte, 0)
+	for _, c := range cipher {
+		t := (c * inverse) % private.U
 		sum := byte(0)
 		bit := byte(1)
 
-		for j := 7; j >= 0; j-- {
-			if t >= s[j] {
-				t -= s[j]
+		// loop through S (right->left) and convert t to binary
+		for i := 7; i >= 0; i-- {
+			if t >= s[i] {
+				t -= s[i]
 				sum += bit
 			}
 			bit = bit << 1
 		}
 
-		res = append(res, sum)
+		result = append(result, sum)
 	}
 
-	return res
+	return result
 }
 
 // BruteForce finds private keys given cipher & PublicKey.
@@ -105,7 +106,10 @@ func bruteHelper(data []uint, public PublicKey, expected []byte, u, v uint, keys
 		V: v,
 	}, public)
 
+	//time.Sleep(time.Duration(rand.Int()%8+2) * time.Second)
+
 	if slices.Equal(test, expected) {
+		//fmt.Println(string(test))
 		keys <- PrivateKey{
 			U: u,
 			V: v,
