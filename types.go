@@ -7,7 +7,7 @@ import (
 )
 
 // S is a superincreasing set.
-type S [8]uint
+type S []uint64
 
 func (s S) IsSuperincreasing() bool {
 	sum := s[0]
@@ -20,18 +20,19 @@ func (s S) IsSuperincreasing() bool {
 	return true
 }
 
-func RandomS() S {
-	result := S{}
-	r := make([]byte, 8)
+func RandomS(size int) S {
+	result := S(make([]uint64, size))
+	r := make([]byte, size)
 	for {
-		rand.Reader.Read(r)
-		result[0] = uint(binary.BigEndian.Uint64(r))
-		for i := 1; i < 8; i++ {
-			rand.Reader.Read(r)
-			result[i] = uint(binary.BigEndian.Uint64(r)) + result[i-1]
+		_, _ = rand.Reader.Read(r)
+		result[0] = binary.BigEndian.Uint64(r)
+		for i := 1; i < size; i++ {
+			_, _ = rand.Reader.Read(r)
+			result[i] = binary.BigEndian.Uint64(r) + result[i-1]
 		}
+
 		// s should be superincreasing & largest # is < max uint / 2 (leave room for PrivateKey.U)
-		if result.IsSuperincreasing() && result[7] < (^uint(0)/2) {
+		if result.IsSuperincreasing() && result[size-1] < (^uint64(0)/2) {
 			break
 		}
 	}
@@ -41,10 +42,10 @@ func RandomS() S {
 // PublicKey requires that:
 //
 // PublicKey[i] = (PrivateKey.V * S[i]) % PrivateKey.U
-type PublicKey [8]uint
+type PublicKey []uint64
 
 func NewPublicKey(s S, private PrivateKey) PublicKey {
-	result := [8]uint{}
+	result := make([]uint64, len(s))
 	for i, si := range s {
 		result[i] = (si * private.V) % private.U
 	}
@@ -58,11 +59,11 @@ func NewPublicKey(s S, private PrivateKey) PublicKey {
 //
 // 2. U > 2*Sn (where Sn is the largest value in the PublicKey)
 type PrivateKey struct {
-	U uint
-	V uint
+	U uint64
+	V uint64
 }
 
-func NewPrivateKey(u, v uint) (PrivateKey, error) {
+func NewPrivateKey(u, v uint64) (PrivateKey, error) {
 	if GCD(v, u) != 1 {
 		return PrivateKey{}, fmt.Errorf("GCD(%d, %d) != 1", u, v)
 	}
@@ -74,25 +75,25 @@ func NewPrivateKey(u, v uint) (PrivateKey, error) {
 }
 
 func RandomPrivateKey(s S) PrivateKey {
-	r := make([]byte, 8)
+	r := make([]byte, len(s))
 	for {
 		// generate random u > 2*Sn
-		var u uint
+		var u uint64
 		for {
-			rand.Reader.Read(r)
-			u = uint(binary.BigEndian.Uint64(r))
-			if u > 2*s[7] {
+			_, _ = rand.Reader.Read(r)
+			u = binary.BigEndian.Uint64(r)
+			if u > 2*s[len(s)-1] {
 				break
 			}
 		}
-		rand.Reader.Read(r)
-		v := uint(binary.BigEndian.Uint64(r))
-		priv, err := NewPrivateKey(u, v)
+		_, _ = rand.Reader.Read(r)
+		v := binary.BigEndian.Uint64(r)
+		private, err := NewPrivateKey(u, v)
 		if err != nil {
 			continue
 		}
 
-		return priv
+		return private
 	}
 }
 
@@ -101,9 +102,9 @@ type Knapsack struct {
 	Private PrivateKey
 }
 
-func RandomKnapsack() Knapsack {
+func RandomKnapsack(size int) Knapsack {
 	// generate random superincreasing set S
-	s := RandomS()
+	s := RandomS(size)
 
 	// generate random large private key
 	p := RandomPrivateKey(s)

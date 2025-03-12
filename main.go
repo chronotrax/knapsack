@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 func main() {
 	var private PrivateKey
 	var public PublicKey
 	var data []byte
-	maxVal := ^uint(0)
+	maxKeys := uint64(5)
 
 	//for i, arg := range os.Args {
 	//	fmt.Printf("%d: %v\n", i, arg)
@@ -20,13 +21,13 @@ func main() {
 
 	if l == 1 {
 		// no args given, use random cryptosystem
-		knap := RandomKnapsack()
-		private = knap.Private
+		knapsack := RandomKnapsack(8)
+		private = knapsack.Private
 
-		public = NewPublicKey(knap.S, private)
+		public = NewPublicKey(knapsack.S, private)
 
 		data = []byte("Hello World!")
-	} else if l == 12 {
+	} else if l >= 5 {
 		// use given crypto system
 		u, err := strconv.ParseUint(os.Args[1], 10, 64)
 		if err != nil {
@@ -40,7 +41,7 @@ func main() {
 			return
 		}
 
-		private, err = NewPrivateKey(uint(u), uint(v))
+		private, err = NewPrivateKey(u, v)
 		if err != nil {
 			fmt.Println("invalid u & v: ", err)
 			return
@@ -48,20 +49,27 @@ func main() {
 
 		data = []byte(os.Args[3])
 
-		s := S{}
-		for i, a := range os.Args[4:] {
+		s := make([]uint64, 0)
+		for _, a := range strings.Split(os.Args[4], ",") {
 			ua, err := strconv.ParseUint(a, 10, 64)
 			if err != nil {
 				fmt.Println("invalid s value: ", err)
 				return
 			}
-			s[i] = uint(ua)
+			s = append(s, ua)
 		}
 
 		public = NewPublicKey(s, private)
+
+		m, err := strconv.ParseUint(os.Args[5], 10, 64)
+		if err != nil {
+			fmt.Println("m is not a uint: ", err)
+			return
+		}
+		maxKeys = m
 	} else {
 		// print help
-		fmt.Println("usage: ./knapsack [u] [v] [data to encrypt] [s1] [s2] ... [s8]")
+		fmt.Println("usage: ./knapsack [u] [v] [data to encrypt] [s1,s1,...,s8] [# of keys to brute force]")
 		return
 	}
 
@@ -80,5 +88,5 @@ func main() {
 	fmt.Println("original data: ", data, string(data))
 
 	fmt.Println("\n\nbrute forcing decryption...")
-	BruteForce(cipher, public, data, maxVal)
+	BruteForce(cipher, public, data, maxKeys)
 }

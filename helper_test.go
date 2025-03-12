@@ -6,13 +6,13 @@ import (
 
 func TestGCD(t *testing.T) {
 	type args struct {
-		a uint
-		b uint
+		a uint64
+		b uint64
 	}
 	tests := []struct {
 		name string
 		args args
-		want uint
+		want uint64
 	}{
 		{
 			name: "valid 1",
@@ -34,13 +34,13 @@ func TestGCD(t *testing.T) {
 
 func Test_EEA(t *testing.T) {
 	type args struct {
-		a uint
-		m uint
+		a uint64
+		m uint64
 	}
 	tests := []struct {
 		name string
 		args args
-		want uint
+		want uint64
 	}{
 		{
 			name: "valid 1",

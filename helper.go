@@ -1,6 +1,6 @@
 package main
 
-func GCD(a, b uint) uint {
+func GCD(a, b uint64) uint64 {
 	for b%a != 0 {
 		r := b % a
 		b = a
@@ -10,7 +10,7 @@ func GCD(a, b uint) uint {
 }
 
 // EEA returns inverse of a mod m.
-func EEA(a uint, m uint) uint {
+func EEA(a, m uint64) uint64 {
 	m2 := int(m)
 	var tn int
 	t := []int{0, 1}
@@ -24,8 +24,9 @@ func EEA(a uint, m uint) uint {
 		a = r
 		n += 1
 	}
+	// make sure the result is positive
 	for tn < 0 {
 		tn += m2
 	}
-	return uint(tn)
+	return uint64(tn)
 }
