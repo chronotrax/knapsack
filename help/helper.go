@@ -1,4 +1,4 @@
-package main
+package help
 
 func GCD(a, b uint64) uint64 {
 	for b%a != 0 {

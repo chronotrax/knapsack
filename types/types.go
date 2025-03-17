@@ -1,10 +1,15 @@
-package main
+package types
 
 import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/chronotrax/knapsack/help"
 )
+
+type Plaintext []byte
+
+type Ciphertext []uint64
 
 // S is a superincreasing set.
 type S []uint64
@@ -18,6 +23,18 @@ func (s S) IsSuperincreasing() bool {
 		sum += si
 	}
 	return true
+}
+
+func NewS(size int) S {
+	a := make([]uint64, size)
+	a[0] = 1
+	sum := uint64(0)
+	for i := 1; i < size; i++ {
+		sum += a[i-1]
+		a[i] = sum + 1
+	}
+
+	return a
 }
 
 func RandomS(size int) S {
@@ -64,7 +81,7 @@ type PrivateKey struct {
 }
 
 func NewPrivateKey(u, v uint64) (PrivateKey, error) {
-	if GCD(v, u) != 1 {
+	if help.GCD(v, u) != 1 {
 		return PrivateKey{}, fmt.Errorf("GCD(%d, %d) != 1", u, v)
 	}
 

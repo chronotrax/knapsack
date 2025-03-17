@@ -1,8 +1,10 @@
-package main
+package crypt
 
 import (
 	"context"
 	"fmt"
+	"github.com/chronotrax/knapsack/help"
+	"github.com/chronotrax/knapsack/types"
 	"golang.org/x/sync/semaphore"
 	"runtime"
 	"slices"
@@ -10,13 +12,13 @@ import (
 )
 
 // Encrypt encrypts data using a PublicKey.
-func Encrypt(data []byte, public PublicKey) []uint64 {
-	result := make([]uint64, 0)
-	for _, d := range data {
+func Encrypt(plain types.Plaintext, public types.PublicKey) types.Ciphertext {
+	cipher := make([]uint64, 0)
+	for _, d := range plain {
 		var sum uint64 = 0
 		var bit byte = 1 << (len(public) - 1)
 
-		// loop through public key (left->right) and sum up values where bits match
+		// loop through the public key (left->right) and sum up values where bits match
 		for i := 0; i < len(public); i++ {
 			if d&bit != 0 {
 				sum += public[i]
@@ -24,22 +26,22 @@ func Encrypt(data []byte, public PublicKey) []uint64 {
 			bit = bit >> 1
 		}
 
-		result = append(result, sum)
+		cipher = append(cipher, sum)
 	}
-	return result
+	return cipher
 }
 
 // Decrypt decrypts cipher using PrivateKey & PublicKey.
-func Decrypt(cipher []uint64, private PrivateKey, public PublicKey) []byte {
-	inverse := EEA(private.V, private.U)
+func Decrypt(cipher types.Ciphertext, private types.PrivateKey, public types.PublicKey) types.Plaintext {
+	inverse := help.EEA(private.V, private.U)
 
-	// re-create superincreasing set S
+	// recreate superincreasing set S
 	s := make([]uint64, len(public))
 	for i := 0; i < len(public); i++ {
 		s[i] = (public[i] * inverse) % private.U
 	}
 
-	result := make([]byte, 0)
+	plain := make([]byte, 0)
 	for _, c := range cipher {
 		t := (c * inverse) % private.U
 		sum := byte(0)
@@ -54,19 +56,19 @@ func Decrypt(cipher []uint64, private PrivateKey, public PublicKey) []byte {
 			bit = bit << 1
 		}
 
-		result = append(result, sum)
+		plain = append(plain, sum)
 	}
 
-	return result
+	return plain
 }
 
 // BruteForce finds private keys given cipher & PublicKey.
 // expected is the original data to compare against.
 // maxKeys is the max # of keys to brute force before stopping
-func BruteForce(cipher []uint64, public PublicKey, expected []byte, maxKeys uint64) {
+func BruteForce(cipher types.Ciphertext, public types.PublicKey, expected types.Plaintext, maxKeys uint64) {
 	maxUInt := ^uint64(0)
 	u, v := uint64(1), uint64(1)
-	keys := make(chan PrivateKey)
+	keys := make(chan types.PrivateKey)
 	sem := semaphore.NewWeighted(int64(runtime.NumCPU()))
 	ctx := context.Background()
 	keysFound := uint64(0)
@@ -104,8 +106,8 @@ loop:
 	fmt.Println("# of keys found: ", keysFound)
 }
 
-func bruteHelper(data []uint64, public PublicKey, expected []byte, u, v uint64, keys chan<- PrivateKey, sem *semaphore.Weighted) {
-	test := Decrypt(data, PrivateKey{
+func bruteHelper(cipher types.Ciphertext, public types.PublicKey, expected types.Plaintext, u, v uint64, keys chan<- types.PrivateKey, sem *semaphore.Weighted) {
+	test := Decrypt(cipher, types.PrivateKey{
 		U: u,
 		V: v,
 	}, public)
@@ -114,7 +116,7 @@ func bruteHelper(data []uint64, public PublicKey, expected []byte, u, v uint64, 
 
 	if slices.Equal(test, expected) {
 		//fmt.Println(string(test))
-		keys <- PrivateKey{
+		keys <- types.PrivateKey{
 			U: u,
 			V: v,
 		}
