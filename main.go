@@ -2,18 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/chronotrax/knapsack/crypt"
-	"github.com/chronotrax/knapsack/types"
+	"github.com/chronotrax/knapsack/knapsack"
+	"math/big"
 	"os"
 	"strconv"
 	"strings"
 )
 
 func main() {
-	var private types.PrivateKey
-	var public types.PublicKey
+	var k *knapsack.Knapsack
 	var data []byte
-	maxK := uint64(5)
+	maxKeys := uint64(5)
 
 	//for i, arg := range os.Args {
 	//	fmt.Printf("%d: %v\n", i, arg)
@@ -23,72 +22,95 @@ func main() {
 
 	if l == 1 {
 		// no args given, use random cryptosystem
-		knapsack := types.RandomKnapsack(8)
-		private = knapsack.Private
-
-		public = types.NewPublicKey(knapsack.S, private)
+		fmt.Println("using a random cryptosystem")
+		var err error
+		k, err = knapsack.NewKnapsack(1)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 
 		data = []byte("Hello World!")
 	} else if l >= 5 {
 		// use given the crypto system
-		u, err := strconv.ParseUint(os.Args[1], 10, 64)
+		fmt.Println("using the given cryptosystem")
+		// read u argument
+		uInt, err := strconv.ParseInt(os.Args[1], 10, 64)
 		if err != nil {
-			fmt.Println("u is not a uint: ", err)
+			fmt.Println("u is not an integer:", err)
 			return
 		}
+		u := big.NewInt(uInt)
 
-		v, err := strconv.ParseUint(os.Args[2], 10, 64)
+		// read v argument
+		vInt, err := strconv.ParseInt(os.Args[2], 10, 64)
 		if err != nil {
-			fmt.Println("v is not a uint: ", err)
+			fmt.Println("v is not an integer:", err)
 			return
 		}
+		v := big.NewInt(vInt)
 
-		private, err = types.NewPrivateKey(u, v)
-		if err != nil {
-			fmt.Println("invalid u & v: ", err)
-			return
+		private := &knapsack.PrivateKey{
+			U: u,
+			V: v,
 		}
 
-		maxKeys, err := strconv.ParseUint(os.Args[3], 10, 64)
+		// read maxKeys argument
+		maxK, err := strconv.ParseUint(os.Args[3], 10, 64)
 		if err != nil {
-			fmt.Println("maxKeys is not a uint: ", err)
+			fmt.Println("maxKeys is not a uint:", err)
 			return
 		}
-		maxK = maxKeys
+		maxKeys = maxK
 
+		// read data argument
 		data = []byte(os.Args[4])
 
-		s := make([]uint64, 0)
-		for _, a := range strings.Split(os.Args[5], ",") {
-			ua, err := strconv.ParseUint(a, 10, 64)
+		// read set argument
+		s := make([]*big.Int, 0)
+		for _, sStr := range strings.Split(os.Args[5], ",") {
+			sInt, err := strconv.ParseInt(sStr, 10, 64)
 			if err != nil {
-				fmt.Println("invalid s value: ", err)
+				fmt.Println("invalid s value:", err)
 				return
 			}
-			s = append(s, ua)
+			s = append(s, big.NewInt(sInt))
 		}
 
-		public = types.NewPublicKey(s, private)
+		k, err = knapsack.NewKnapsackCustom(len(s)/8, private, s)
 	} else {
 		// print help
 		fmt.Println("usage: ./knapsack [u] [v] [maxKeys to brute force] [data to encrypt] [s1,s1,...,s8]")
 		return
 	}
 
-	fmt.Printf("private key: u = %d, v = %d\n", private.U, private.V)
-	fmt.Println("public key: ", public)
+	if k == nil {
+		fmt.Println("k == nil, something went wrong")
+		return
+	}
+
+	fmt.Println("block size (in bytes): ", k.BlockSize)
+	fmt.Println("block size (in bits): ", k.BlockSize*8)
+	fmt.Printf("private key: v=%d, u=%d\n", k.Private.V, k.Private.U)
+	fmt.Println("public key: ", k.Public)
 	fmt.Println("data: ", data, string(data))
 
 	fmt.Println("\nencrypting...")
-	cipher := crypt.Encrypt(data, public)
+	plain := k.NewPlaintext(data)
+	cipher := k.Encrypt(plain)
 	fmt.Println("ciphertext: ", cipher)
 
 	fmt.Println("\ndecrypting...")
-	plain := crypt.Decrypt(cipher, private, public)
+	newPlain, err := k.Decrypt(cipher)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	newData := k.FromPlaintext(newPlain)
 
-	fmt.Println("plaintext: ", plain, string(plain))
+	fmt.Println("decrypted data: ", newData, string(newData))
 	fmt.Println("original data: ", data, string(data))
 
 	fmt.Println("\n\nbrute forcing decryption...")
-	crypt.BruteForce(cipher, public, data, maxK)
+	knapsack.BruteForce(k.BlockSize, cipher, k.Public, data, maxKeys)
 }

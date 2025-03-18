@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/chronotrax/knapsack/types"
+	"github.com/chronotrax/knapsack/knapsack"
 	"log"
 	"os"
 	"strconv"
@@ -14,16 +14,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	s := types.NewS(size)
+	s, err := knapsack.RandomSet(size)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Println("Superincreasing?:", s.IsSuperincreasing())
 	fmt.Println("size:", len(s))
 
-	for i, x := range s {
-		if i == len(s)-1 {
-			fmt.Printf("%v\n", x)
-			continue
-		}
-		fmt.Printf("%v,", x)
-	}
+	fmt.Println(knapsack.BigIntsToStr(s))
 }
