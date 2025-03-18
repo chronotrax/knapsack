@@ -32,18 +32,22 @@ func BruteForce(blockSize int, cipher Ciphertext, public PublicKey, expected []b
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	ticker := time.NewTicker(3 * time.Second)
 	t := time.Now()
 
 	// ticker goroutine
 	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		tracker := big.NewInt(0)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
 				t2 := time.Now().Sub(t).Round(time.Second)
-				fmt.Printf("currently on: (v=%d u=%d), time elapsed: %v\n", v, u, t2)
+				change := new(big.Int).Sub(u, tracker)
+				speed := float64(change.Int64() / 10)
+				fmt.Printf("time elapsed: %v, speed: (u per second) %.02f/s, currently on: (v=%d u=%d)\n", t2, speed, v, u)
+				tracker = new(big.Int).Set(u)
 			}
 		}
 	}()
@@ -112,8 +116,15 @@ func BruteForce(blockSize int, cipher Ciphertext, public PublicKey, expected []b
 	fmt.Println("# of keys found: ", keysFound)
 }
 
+//var tempV = big.NewInt(10000)
+//var tempU = big.NewInt(10001)
+
 func worker(k *Knapsack, cipher Ciphertext, expected []byte, keys chan<- *PrivateKey) {
 	//time.Sleep(time.Duration(mathRand.Int()%10+1) * time.Second)
+
+	//if tempV.Cmp(k.Private.V) == 0 && tempU.Cmp(k.Private.U) == 0 {
+	//	fmt.Println("DEBUG")
+	//}
 
 	plain, err := k.Decrypt(cipher)
 	if err != nil {

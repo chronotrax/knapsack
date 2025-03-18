@@ -263,8 +263,8 @@ func (k *Knapsack) Encrypt(plain Plaintext) Ciphertext {
 }
 
 func (k *Knapsack) Decrypt(cipher Ciphertext) (Plaintext, error) {
-	u := k.Private.U
 	v := k.Private.V
+	u := k.Private.U
 	// if u == 0
 	if u.Cmp(big.NewInt(0)) == 0 {
 		return nil, fmt.Errorf("u == 0")

@@ -14,10 +14,6 @@ func main() {
 	var data []byte
 	maxKeys := uint64(5)
 
-	//for i, arg := range os.Args {
-	//	fmt.Printf("%d: %v\n", i, arg)
-	//}
-
 	l := len(os.Args)
 
 	if l == 1 {
@@ -34,21 +30,19 @@ func main() {
 	} else if l >= 5 {
 		// use given the crypto system
 		fmt.Println("using the given cryptosystem")
-		// read u argument
-		uInt, err := strconv.ParseInt(os.Args[1], 10, 64)
-		if err != nil {
-			fmt.Println("u is not an integer:", err)
-			return
-		}
-		u := big.NewInt(uInt)
-
 		// read v argument
-		vInt, err := strconv.ParseInt(os.Args[2], 10, 64)
-		if err != nil {
-			fmt.Println("v is not an integer:", err)
+		v, success := new(big.Int).SetString(os.Args[1], 10)
+		if !success {
+			fmt.Println("v is not an integer")
 			return
 		}
-		v := big.NewInt(vInt)
+
+		// read u argument
+		u, success := new(big.Int).SetString(os.Args[2], 10)
+		if !success {
+			fmt.Println("u is not an integer")
+			return
+		}
 
 		private := &knapsack.PrivateKey{
 			U: u,
@@ -69,18 +63,18 @@ func main() {
 		// read set argument
 		s := make([]*big.Int, 0)
 		for _, sStr := range strings.Split(os.Args[5], ",") {
-			sInt, err := strconv.ParseInt(sStr, 10, 64)
-			if err != nil {
+			si, success := new(big.Int).SetString(strings.TrimSpace(sStr), 10)
+			if !success {
 				fmt.Println("invalid s value:", err)
 				return
 			}
-			s = append(s, big.NewInt(sInt))
+			s = append(s, si)
 		}
 
 		k, err = knapsack.NewKnapsackCustom(len(s)/8, private, s)
 	} else {
 		// print help
-		fmt.Println("usage: ./knapsack [u] [v] [maxKeys to brute force] [data to encrypt] [s1,s1,...,s8]")
+		fmt.Println("usage: ./knapsack [u] [v] [max # of keys to brute force] [data to encrypt] [s1,s1,...,s8]")
 		return
 	}
 
