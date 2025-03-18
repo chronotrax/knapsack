@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"runtime"
 	"slices"
-	"sync"
 	"time"
 )
 
@@ -18,17 +17,14 @@ func BruteForce(blockSize int, cipher Ciphertext, public PublicKey, expected []b
 	maxVal := big.NewInt(math.MaxInt)
 	//maxVal := big.NewInt(4)
 	u := big.NewInt(1)
-	v := big.NewInt(1)
-	keys := make(chan *PrivateKey)
+
+	validKeys := make(chan *PrivateKey)
 	keysFound := uint64(0)
 
-	threads := int64(runtime.NumCPU()) * 2
-	//threads := int64(2)
-	workers := make(chan struct{}, threads)
-	fmt.Printf("using %d threads\n", threads)
-
-	wg := sync.WaitGroup{}
-	m := sync.Mutex{}
+	threads := int64(runtime.NumCPU())
+	//threads := int64(1)
+	workers := make(chan *big.Int, threads)
+	fmt.Printf("using %d thread(s)\n", threads)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -46,25 +42,52 @@ func BruteForce(blockSize int, cipher Ciphertext, public PublicKey, expected []b
 				t2 := time.Now().Sub(t).Round(time.Second)
 				change := new(big.Int).Sub(u, tracker)
 				speed := float64(change.Int64() / 10)
-				fmt.Printf("time elapsed: %v, speed: (u per second) %.02f/s, currently on: (v=%d u=%d)\n", t2, speed, v, u)
+				fmt.Printf("time elapsed: %v, speed: (u per second) %.02f/s, currently on: u=%d\n", t2, speed, u)
 				tracker = new(big.Int).Set(u)
 			}
 		}
 	}()
 
-	// keys goroutine
+	// validKeys goroutine
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case p := <-keys:
-				fmt.Printf("found private key! v=%d u=%d\n", p.V, p.U)
-				fmt.Println("time taken: ", time.Now().Sub(t))
+			case p := <-validKeys:
+				fmt.Printf("time taken: %v, found private key! v=%d u=%d\n", time.Now().Sub(t), p.V, p.U)
+
 				keysFound++
 				if keysFound >= maxKeys {
+					fmt.Println("max valid validKeys found")
 					cancel()
 				}
+			}
+		}
+	}()
+
+	// worker goroutine
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case tryU := <-workers: // acquire a thread and a `u` value to try
+				//fmt.Printf("sending v=%d, u=%d\n", u)
+				k := &Knapsack{
+					BlockSize: blockSize,
+					Private: &PrivateKey{
+						U: tryU,
+					},
+					Public: public,
+				}
+
+				go func() {
+					worker(ctx, k, cipher, expected, validKeys) // blocks until worker completes
+
+					<-workers // release a thread
+					//fmt.Println("worker goroutine completed")
+				}()
 			}
 		}
 	}()
@@ -74,70 +97,49 @@ func BruteForce(blockSize int, cipher Ciphertext, public PublicKey, expected []b
 		select {
 		case <-ctx.Done():
 			working = false
-		case workers <- struct{}{}: // acquire a thread
-			// set up a worker
-			wg.Add(1)
-			m.Lock() // prevent the main thread from changing v, u prematurely
-			go func() {
-				defer wg.Done()
-				//fmt.Printf("sending v=%d, u=%d\n", v, u)
-				k := &Knapsack{
-					BlockSize: blockSize,
-					Private: &PrivateKey{
-						U: new(big.Int).Set(u),
-						V: new(big.Int).Set(v),
-					},
-					Public: public,
-				}
+		default:
+			// send a `u` value to worker channel
+			workers <- new(big.Int).Set(u)
 
-				m.Unlock() // done working with v, u
-
-				worker(k, cipher, expected, keys) // blocks until worker completes
-
-				<-workers // release a thread
-			}()
-
-			m.Lock() // change v, u
-			// if v < u
-			if v.Cmp(u) == -1 {
-				v.Add(v, big.NewInt(1))
-			} else if u.Cmp(maxVal) == 0 {
+			// if u == maxVal
+			if u.Cmp(maxVal) == 0 {
 				fmt.Println("max value reached")
 				cancel()
 				working = false
 			} else {
 				u.Add(u, big.NewInt(1))
-				v = big.NewInt(1)
 			}
-			m.Unlock() // done changing v, u
 		}
 	}
-	wg.Wait()
-	fmt.Println("# of keys found: ", keysFound)
+	fmt.Println("# of valid validKeys found: ", keysFound)
 }
 
-//var tempV = big.NewInt(10000)
-//var tempU = big.NewInt(10001)
+func worker(ctx context.Context, k *Knapsack, cipher Ciphertext, expected []byte, keys chan<- *PrivateKey) {
+	// for v < u
+	for v := big.NewInt(1); v.Cmp(k.Private.U) == -1; v.Add(v, big.NewInt(1)) {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			k.Private.V = v
 
-func worker(k *Knapsack, cipher Ciphertext, expected []byte, keys chan<- *PrivateKey) {
-	//time.Sleep(time.Duration(mathRand.Int()%10+1) * time.Second)
+			//time.Sleep(time.Duration(mathRand.Int()%10+1) * time.Second)
+			//k.Private.V = big.NewInt(70000)
+			//k.Private.U = big.NewInt(70001)
 
-	//if tempV.Cmp(k.Private.V) == 0 && tempU.Cmp(k.Private.U) == 0 {
-	//	fmt.Println("DEBUG")
-	//}
+			plain, err := k.Decrypt(cipher)
+			if err != nil {
+				//fmt.Printf("FAIL: error: v=%d u=%d\n", k.Private.V, k.Private.U)
+				continue
+			}
 
-	plain, err := k.Decrypt(cipher)
-	if err != nil {
-		//fmt.Printf("FAIL: error: v=%d u=%d\n", k.Private.V, k.Private.U)
-		return
+			data := k.FromPlaintext(plain)
+
+			if slices.Equal(data, expected) {
+				keys <- k.Private
+			} // else {
+			//fmt.Printf("FAIL: not equal: v=%d u=%d\n", k.Private.V, k.Private.U)
+			//}
+		}
 	}
-
-	data := k.FromPlaintext(plain)
-
-	if slices.Equal(data, expected) {
-		keys <- k.Private
-	} else {
-		//fmt.Printf("FAIL: not equal: v=%d u=%d\n", k.Private.V, k.Private.U)
-	}
-	return
 }
