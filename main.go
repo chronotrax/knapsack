@@ -58,7 +58,8 @@ func main() {
 		maxKeys = maxK
 
 		// read data argument
-		data = []byte(os.Args[4])
+		//data = []byte(os.Args[4])
+		data = []byte{0x96}
 
 		// read set argument
 		s := make([]*big.Int, 0)
@@ -104,6 +105,12 @@ func main() {
 
 	fmt.Println("decrypted data: ", newData, string(newData))
 	fmt.Println("original data: ", data, string(data))
+
+	fmt.Println("\n\nStarting Shamir attack...")
+	err = knapsack.Attack(k.BlockSize, cipher, k.Public, data)
+	if err != nil {
+		fmt.Println("error when running Shamir attack:", err)
+	}
 
 	fmt.Println("\n\nbrute forcing decryption...")
 	knapsack.BruteForce(k.BlockSize, cipher, k.Public, data, maxKeys)
