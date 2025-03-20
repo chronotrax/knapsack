@@ -9,9 +9,15 @@ import (
 )
 
 func main() {
+	if len(os.Args) != 2 {
+		fmt.Println("usage: generate-set [blockSize]")
+		return
+	}
+
 	size, err := strconv.Atoi(os.Args[1])
-	if err != nil {
-		log.Fatal(err)
+	if err != nil || size <= 0 {
+		fmt.Println("argument is not a positive integer:", os.Args[1])
+		return
 	}
 
 	s, err := knapsack.RandomSet(size)
