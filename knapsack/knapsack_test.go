@@ -5,7 +5,6 @@ import (
 	"math/big"
 	mathRand "math/rand/v2"
 	"reflect"
-	"strconv"
 	"testing"
 )
 
@@ -87,12 +86,9 @@ func TestKnapsack(t *testing.T) {
 }
 
 func TestRandomKnapsack(t *testing.T) {
-	for i := range 100 {
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			//r := (rand.Int() % 8) + 1
+	t.Run("random", func(t *testing.T) {
+		for range 100 {
 			r := (mathRand.Int() % 8) + 1
-
-			t.Logf("creating knapsack with blocksize %d", r)
 
 			k, err := NewKnapsack(r)
 			if err != nil {
@@ -115,6 +111,6 @@ func TestRandomKnapsack(t *testing.T) {
 			if !reflect.DeepEqual(got, data) {
 				t.Errorf("got %#v, want %#v", got, data)
 			}
-		})
-	}
+		}
+	})
 }

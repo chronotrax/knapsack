@@ -4,156 +4,199 @@ import (
 	"fmt"
 	"github.com/chronotrax/knapsack/matrix"
 	"math/big"
+	"slices"
 )
 
-// copySlice copies s to a new []*big.Int to prevent modifying the original slice.
-func copySlice(s []*big.Int) []*big.Int {
-	m := make([]*big.Int, len(s))
-	for i := 0; i < len(s); i++ {
-		m[i] = new(big.Int).Set(s[i])
-	}
-	return m
-}
+// gs is the Gram–Schmidt algorithm.
+func gs(b matrix.Matrix) (x, y matrix.Matrix) {
+	n := b.Height()
+	x = matrix.NewMatrixEmpty(n, n)
+	y = matrix.NewMatrixEmpty(n, n)
 
-// GS is the Gram–Schmidt algorithm.
-func GS(b matrix.Matrix) (matrix.Matrix, error) {
-	size := len(b)
-	x := matrix.NewMatrixEmpty(size, size)
-
-	// x0 = b0
-	x[0] = copySlice(b[0])
+	// x0 = b0 (b0 is M's first column, not row)
+	x.SetCol(0, b.Col(0))
 
 	// for j = 1 to n
-	for j := 1; j < size; j++ {
+	for j := 1; j < n; j++ {
 		// xj = bj
-		x[j] = copySlice(b[j])
+		x.SetCol(j, b.Col(j))
 
-		// for i = 0 to j - 1
-		for i := 0; i < j-1; i++ {
+		// for i = 0 to j - 1 (inclusive)
+		for i := 0; i <= j-1; i++ {
 			// xi * bj
-			prod, err := matrix.DotProduct(x[i], b[j])
-			if err != nil {
-				return nil, err
-			}
-			y := new(big.Rat).SetInt(prod)
-
-			// ||xi||^2
-			prod, err = matrix.DotProduct(x[i], x[i])
-			if err != nil {
-				return nil, err
-			}
+			prod := new(big.Rat).Set(matrix.DotProduct(x.Col(i), b.Col(j)))
 
 			// yij = (xi * bj) / ||xi||^2
-			y.Quo(y, new(big.Rat).SetInt(prod))
+			co := new(big.Rat).Quo(prod, matrix.DotProduct(x.Col(i), x.Col(i)))
+			// we must keep track of coefficients for LLL
+			y[j][i] = co
 
 			// xj = xj - yij * xi
-			sub, err := matrix.SliceSubtract(x[j], matrix.MultiplyRatOnSlice(x[i], y))
-			x[j] = sub
+			x.SetCol(j, matrix.SubtractVec(x.Col(j), matrix.MulRatOnVec(co, x.Col(i))))
 		}
 	}
 
-	return x, nil
+	return x, y
 }
 
-func LLL(b matrix.Matrix, delta *big.Rat, maxIterations int) (matrix.Matrix, error) {
-	j := 1
-	n := len(b)
-	iter := 0
+// lll is the Lenstra–Lenstra–Lovász lattice basis reduction algorithm
+func lll(b matrix.Matrix, delta *big.Rat, maxIterations int) matrix.Matrix {
+	// matrix is n by n square
+	n := b.Height()
 
-	x, err := GS(b)
-	if err != nil {
-		return nil, err
+	// (X,Y) = GS(M)
+	x, y := gs(b)
+	//fmt.Printf("x after first GS:\n%s\n\n", x)
+	//fmt.Printf("y after first GS:\n%s\n\n", y)
+
+	// since we cannot run forever, go until maxIterations
+	for iter := 1; iter <= maxIterations; iter++ {
+		//fmt.Println("ITERATION", iter)
+
+		// for j = 1 to n
+		for j := 1; j < n; j++ {
+
+			// for i = j - 1 to 0
+			for i := j - 1; i >= 0; i-- {
+				// |yij|
+				abs := new(big.Rat).Abs(y[j][i])
+
+				// if |yij| > 1/2
+				if abs.Cmp(big.NewRat(1, 2)) > 0 {
+					// yij + 1/2
+					sum := new(big.Rat).Add(y[j][i], big.NewRat(1, 2))
+
+					// floor(yij + 1/2)
+					flo := new(big.Int).Quo(sum.Num(), sum.Denom())
+
+					// bj - floor(yij + 1/2) * bi
+					dif := matrix.SubtractVec(b.Col(j), matrix.MulRatOnVec(new(big.Rat).SetInt(flo), b.Col(i)))
+
+					// bj = bj - floor(yij + 1/2) * bi
+					b.SetCol(j, dif)
+				}
+			}
+		}
+
+		//fmt.Printf("x after first half of LLL:\n%s\n\n", x)
+		//fmt.Printf("y after first half of LLL:\n%s\n\n", y)
+
+		// (X,Y) = GS(M)
+		x, y = gs(b)
+		//fmt.Printf("x after second GS:\n%s\n\n", x)
+		//fmt.Printf("y after second GS:\n%s\n\n", y)
+
+		// for j = 0 to n - 1
+		for j := 0; j < n-1; j++ {
+			// 3/4 * ||xj||^2
+			right := new(big.Rat).Mul(delta, matrix.DotProduct(x.Col(j), x.Col(j)))
+
+			// yj,j+1 * xj
+			prod := matrix.MulRatOnVec(y[j+1][j], x.Col(j))
+
+			// xj+1 + yj,j+1 * xj
+			sum := make(matrix.Vector, n)
+			for i := 0; i < len(prod); i++ {
+				sum[i] = new(big.Rat).Add(prod[i], x[i][j+1])
+			}
+
+			// ||xj+1 + yj,j+1 * xj||^2
+			left := matrix.DotProduct(sum, sum)
+
+			// if ||xj+1 + yj,j+1 * xj||^2 < 3/4 * ||xj||^2
+			if left.Cmp(right) < 0 {
+				// swap(bj, bj+1)
+				temp := b.Col(j)
+				b.SetCol(j, b.Col(j+1))
+				b.SetCol(j+1, temp)
+				break
+			}
+		}
+
+		//fmt.Printf("x after second half of LLL:\n%s\n\n", x)
+		//fmt.Printf("y after second half of LLL:\n%s\n\n", y)
 	}
 
-	// for j = 1 to n
-	for j < n && iter < maxIterations {
-		iter++
-
-		// for i = j - 1 to 0
-		for i := j - 1; i >= 0; i-- {
-			prod, err := matrix.DotProduct(x[i], b[j])
-			if err != nil {
-				return nil, err
-			}
-			q := new(big.Rat).SetInt(prod)
-
-			prod, err = matrix.DotProduct(x[i], x[i])
-			if err != nil {
-				return nil, err
-			}
-			q.Quo(q, new(big.Rat).SetInt(prod))
-			roundQ := new(big.Int).Set(q.Num())
-			roundQ.Div(roundQ, q.Denom())
-			sub, err := matrix.SliceSubtract(b[j], matrix.MultiplyIntOnSlice(b[i], roundQ))
-			b[j] = sub
-
-			x, err = GS(b)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		prod, err := matrix.DotProduct(x[j-1], x[j-1])
-		if err != nil {
-			return nil, err
-		}
-		d := new(big.Rat).Mul(delta, new(big.Rat).SetInt(prod))
-
-		prod, err = matrix.DotProduct(x[j], x[j])
-		if err != nil {
-			return nil, err
-		}
-		v := new(big.Rat).SetInt(prod)
-
-		prod, err = matrix.DotProduct(x[j-1], x[j])
-		if err != nil {
-			return nil, err
-		}
-		v.Add(v, new(big.Rat).SetInt(prod))
-
-		if d.Cmp(v) < 0 {
-			b[j], b[j-1] = b[j-1], b[j]
-			j = max(j-1, 1)
-			x, err = GS(b)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			j++
-		}
-	}
-
-	return b, nil
+	return b
 }
 
-func Attack(blockSize int, cipher Ciphertext, public PublicKey, expected []byte) error {
+// checkColumn checks if the c column of Matrix m is in the correct form:
+// 0 to n-2 are all 0's or 1's, and n-1 is a 0.
+func checkColumn(c matrix.Vector) bool {
+	// 0 to n-2 must be a 0 or 1
+	for i := 0; i < len(c)-1; i++ {
+		t := new(big.Int).Set(c[i].Num())
+		// if t != 0 and t != 1
+		if t.Cmp(big.NewInt(0)) != 0 && t.Cmp(big.NewInt(1)) != 0 {
+			return false
+		}
+	}
+
+	// the last value must be == 0
+	if c[len(c)-1].Num().Cmp(big.NewInt(0)) != 0 {
+		return false
+	}
+
+	return true
+}
+
+func Attack(blockSize int, cipher Ciphertext, public PublicKey, expected []byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Attack had an panic:", r)
+		}
+	}()
+
+	k := &Knapsack{
+		BlockSize: blockSize,
+		Public:    public,
+	}
+
+	// size is 1 larger than the original block size
 	size := len(public) + 1
 	m := matrix.NewMatrixEmpty(size, size)
 
+	// make 0 to n-1 an identity matrix
 	for i := 0; i < size-1; i++ {
-		m[i][i] = big.NewInt(1)
+		m[i][i] = big.NewRat(1, 1)
 	}
 
+	// make bottom row (0 to n-1) the public key
 	for i := 0; i < size-1; i++ {
-		m[size-1][i] = public[i]
+		m[size-1][i] = new(big.Rat).SetInt(public[i])
 	}
 
-	m[size-1][size-1] = new(big.Int).Mul(cipher[0], big.NewInt(-1))
+	// make bottom right corner -1*cipher
+	m[size-1][size-1] = new(big.Rat).Mul(new(big.Rat).SetInt(cipher[0]), big.NewRat(-1, 1))
 
 	fmt.Printf("initial matrix:\n%s\n\n", m)
 
-	reduced, err := LLL(m, big.NewRat(3, 4), 1000)
-	if err != nil {
-		return err
-	}
+	reduced := lll(m, big.NewRat(3, 4), 1000)
 
 	fmt.Printf("reduced matrix:\n%s\n\n", reduced)
 
-	s := make([]*big.Int, size)
-	for i, v := range reduced {
-		s[i] = v[i]
+	found := false
+	for i := 0; i < size; i++ {
+		col := reduced.Col(i)
+		if checkColumn(col) {
+			found = true
+			fmt.Printf("suspected plaintext found at column %d: %v\n", i, col)
+
+			plain := make(Plaintext, len(public))
+			for j := 0; j < len(public); j++ {
+				plain[j] = new(big.Int).Set(col[j].Num())
+			}
+
+			data := k.FromPlaintext(plain)
+			if slices.Equal(data, expected) {
+				fmt.Println("suspected plaintext matches original! :D")
+			} else {
+				fmt.Println("but it does NOT match the original plaintext :(")
+			}
+		}
 	}
 
-	fmt.Println("suspected private set:", s)
-	return nil
+	if !found {
+		fmt.Println("no suspected plaintext found in reduced matrix :(")
+	}
 }

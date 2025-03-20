@@ -58,8 +58,24 @@ func main() {
 		maxKeys = maxK
 
 		// read data argument
-		//data = []byte(os.Args[4])
-		data = []byte{0x96}
+		for _, dStr := range strings.Split(os.Args[4], ",") {
+			s := strings.TrimSpace(dStr)
+			if len(s) == 0 {
+				continue
+			}
+
+			if len(s) != 2 {
+				fmt.Println("not a hex string (0x00)", s)
+				return
+			}
+
+			d, err := strconv.ParseUint(s, 16, 8)
+			if err != nil {
+				fmt.Println("invalid hex", s)
+				return
+			}
+			data = append(data, byte(d))
+		}
 
 		// read set argument
 		s := make([]*big.Int, 0)
@@ -75,7 +91,7 @@ func main() {
 		k, err = knapsack.NewKnapsackCustom(len(s)/8, private, s)
 	} else {
 		// print help
-		fmt.Println("usage: ./knapsack [u] [v] [max # of keys to brute force] [data to encrypt] [s1,s1,...,s8]")
+		fmt.Println("usage: ./knapsack [v] [u] [max # of keys to brute force] [hex string to encrypt] [s1,s1,...,s8]")
 		return
 	}
 
@@ -107,10 +123,7 @@ func main() {
 	fmt.Println("original data: ", data, string(data))
 
 	fmt.Println("\n\nStarting Shamir attack...")
-	err = knapsack.Attack(k.BlockSize, cipher, k.Public, data)
-	if err != nil {
-		fmt.Println("error when running Shamir attack:", err)
-	}
+	knapsack.Attack(k.BlockSize, cipher, k.Public, data)
 
 	fmt.Println("\n\nbrute forcing decryption...")
 	knapsack.BruteForce(k.BlockSize, cipher, k.Public, data, maxKeys)
